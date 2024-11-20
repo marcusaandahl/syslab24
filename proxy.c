@@ -83,8 +83,10 @@ void handle_request ( int client_fd )
    // read    N bytes from client.
     num_bytes = read_line ( client_fd, buf );
     if ( error_read ( num_bytes ) ) { return; }
-    int x = read_line(client_fd, buf);
-    if ( error_read ( x ) ) { return; }
+    read_line(client_fd, buf);
+    read_line(client_fd, buf);
+    read_line(client_fd, buf);
+    read_line(client_fd, buf);
 
     /* print what we just read (it's not null-terminated) */
     printf("\e[1mPRINTF 2\e[0m\n");
