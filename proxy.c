@@ -1,6 +1,5 @@
 /**
- * TODO: fill in your name and ITU alias
- * @author FIRSTNAME LASTNAME <ALIAS@itu.dk>
+ * @author MARCUS AANDAHL <maraa@itu.dk>
  */
 
 #include <sys/socket.h>
@@ -31,7 +30,7 @@ int main ( int argc, char **argv )
 
     /* Handle connection requests. */
     while ( 1 ) {
-	handle_connection_request ( listen_fd );
+       handle_connection_request ( listen_fd );
     }
 
     return 0; // Indicates "no error" (although this is never reached).
@@ -105,12 +104,13 @@ void handle_request ( int client_fd )
     return_cd = write_all ( server_fd, request_hdr, strlen(request_hdr) );
     if ( error_write_server ( server_fd, return_cd ) ) { return; }
 
-    /* Transfer the response from the server, to the client.
-       (until server responds with EOF). */
-    /* TODO insert code here! (ballpark: 6 lines +/-) 
-       working solution is in p1-sol.txt
-       try writing your own code; use p1-sol.txt only 
-       if you are hard-stuck! */
+    /* Transfer the response from the server, to the client. (until server responds with EOF). */
+   do {
+      num_bytes = read ( server_fd, buf, MAX_LINE );
+      if ( error_read_server  ( server_fd, num_bytes ) ) { return; }
+      num_bytes = write_all ( client_fd, buf, num_bytes );
+      if ( error_write_client ( client_fd, num_bytes ) ) { return; }
+   } while ( num_bytes > 0 );
     
     /* success; close the file descrpitor. */
     return_cd = close ( server_fd );
