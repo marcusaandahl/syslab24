@@ -81,9 +81,10 @@ void handle_request ( int client_fd )
     /* read HTTP Request-line */
     printf("\e[1mPRINTF 1\e[0m\n");
    // read    N bytes from client.
-    printf("value of buf: %.*s\n", (int)sizeof(buf), buf);
     num_bytes = read_line ( client_fd, buf );
     if ( error_read ( num_bytes ) ) { return; }
+    int x = read_line(client_fd, buf);
+    if ( error_read ( x ) ) { return; }
 
     /* print what we just read (it's not null-terminated) */
     printf("\e[1mPRINTF 2\e[0m\n");
