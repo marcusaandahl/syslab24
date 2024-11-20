@@ -79,30 +79,30 @@ void handle_request ( int client_fd )
     ssize_t num_bytes;
     
     /* read HTTP Request-line */
-    printf("\e[PRINTF 1\e[0m\n");
+    printf("\e[1mPRINTF 1\e[0m\n");
     num_bytes = read_line ( client_fd, buf );
     if ( error_read ( num_bytes ) ) { return; }
 
     /* print what we just read (it's not null-terminated) */
-    printf("\e[PRINTF 2\e[0m\n");
+    printf("\e[1mPRINTF 2\e[0m\n");
     printf("%.*s", (int)num_bytes, buf); // typeast is safe; num_bytes <= MAX_LINE
     sscanf(buf, "%s %s %s", method, uri, version);
 
     /* Ignore non-GET requests (your proxy is only tested on GET requests). */
-    printf("\e[PRINTF 2\e[0m\n");
+    printf("\e[1mPRINTF 2\e[0m\n");
     if ( error_non_get ( method ) ) { return; }
 
     /* Parse URI from GET request */
-   printf("\e[PRINTF 3\e[0m\n");
+   printf("\e[1mPRINTF 3\e[0m\n");
     parse_uri(uri, hostname, path, port);
 
     /* Set the request header */
-    printf("\e[PRINTF 4\e[0m\n");
+    printf("\e[1mPRINTF 4\e[0m\n");
     return_cd = set_request_header ( request_hdr, hostname, path, port, client_fd );
     if ( error_header ( return_cd ) ) { return; }
 
     /* Create the server fd. */
-    printf("\e[PRINTF 5\e[0m\n");
+    printf("\e[1mPRINTF 5\e[0m\n");
     server_fd = create_server_fd ( hostname, port );
     if ( error_socket_server ( server_fd ) ) { return; }
 
@@ -113,7 +113,7 @@ void handle_request ( int client_fd )
 
     /* Transfer the response from the server, to the client. (until server responds with EOF). */
 
-   printf("\e[PRINTF 7\e[0m\n");
+   printf("\e[1mPRINTF 7\e[0m\n");
    do {
       num_bytes = read ( server_fd, buf, MAX_LINE );
       if ( error_read_server  ( server_fd, num_bytes ) ) { return; }
@@ -123,7 +123,7 @@ void handle_request ( int client_fd )
 
     /* success; close the file descrpitor. */
 
-   printf("\e[PRINTF 8\e[0m\n");
+   printf("\e[1mPRINTF 8\e[0m\n");
     return_cd = close ( server_fd );
     if ( error_close_server ( return_cd ) ) { /* ignore */ }
 }
