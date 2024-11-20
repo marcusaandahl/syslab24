@@ -79,29 +79,29 @@ void handle_request ( int client_fd )
     ssize_t num_bytes;
     
     /* read HTTP Request-line */
-    printf("\e[1mPRINTF 1\e[0m\n");
+    // printf("\e[1mPRINTF 1\e[0m\n");
    // read    N bytes from client.
     num_bytes = read_line ( client_fd, buf );
     if ( error_read ( num_bytes ) ) { return; }
 
     /* print what we just read (it's not null-terminated) */
-    printf("\e[1mPRINTF 2\e[0m\n");
+    // printf("\e[1mPRINTF 2\e[0m\n");
    // GET http://google.com/ HTTP/1.1
     printf("%.*s", (int)num_bytes, buf); // typeast is safe; num_bytes <= MAX_LINE
     sscanf(buf, "%s %s %s", method, uri, version);
 
     /* Ignore non-GET requests (your proxy is only tested on GET requests). */
-    printf("\e[1mPRINTF 3\e[0m\n");
+    // printf("\e[1mPRINTF 3\e[0m\n");
    // success: it is a GET request.
     if ( error_non_get ( method ) ) { return; }
 
     /* Parse URI from GET request */
-   printf("\e[1mPRINTF 4\e[0m\n");
+   // printf("\e[1mPRINTF 4\e[0m\n");
     // _
     parse_uri(uri, hostname, path, port);
 
     /* Set the request header */
-    printf("\e[1mPRINTF 5\e[0m\n");
+    // printf("\e[1mPRINTF 5\e[0m\n");
     /*
         read    18 bytes from client.
         read    24 bytes from client.
@@ -116,7 +116,7 @@ void handle_request ( int client_fd )
     printf("headers: %.*s\n", (int)sizeof(request_hdr), request_hdr);
 
     /* Create the server fd. */
-    printf("\e[1mPRINTF 6\e[0m\n");
+    // printf("\e[1mPRINTF 6\e[0m\n");
     /*
         success: generate server addresses.
         HERE
@@ -127,14 +127,14 @@ void handle_request ( int client_fd )
     if ( error_socket_server ( server_fd ) ) { return; }
 
     /* Write the request (header) to the server. */
-    printf("\e[1mPRINTF 7\e[0m\n");
+    // printf("\e[1mPRINTF 7\e[0m\n");
     // wrote  179 bytes to server.
     return_cd = write_all ( server_fd, request_hdr, strlen(request_hdr) );
     if ( error_write_server ( server_fd, return_cd ) ) { return; }
 
     /* Transfer the response from the server, to the client. (until server responds with EOF). */
 
-   printf("\e[1mPRINTF 8\e[0m\n");
+   // printf("\e[1mPRINTF 8\e[0m\n");
     /*
         read   773 bytes from server.
         wrote  773 bytes to client.
@@ -150,7 +150,7 @@ void handle_request ( int client_fd )
 
     /* success; close the file descrpitor. */
 
-   printf("\e[1mPRINTF 9\e[0m\n");
+   // printf("\e[1mPRINTF 9\e[0m\n");
     // CLOSE ETC.
     return_cd = close ( server_fd );
     if ( error_close_server ( return_cd ) ) { /* ignore */ }
