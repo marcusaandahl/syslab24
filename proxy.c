@@ -81,6 +81,7 @@ void handle_request ( int client_fd )
     /* read HTTP Request-line */
     printf("\e[1mPRINTF 1\e[0m\n");
    // read    N bytes from client.
+    printf("value of buf: %.*s\n", (int)sizeof(buf), buf);
     num_bytes = read_line ( client_fd, buf );
     if ( error_read ( num_bytes ) ) { return; }
 
@@ -115,17 +116,30 @@ void handle_request ( int client_fd )
 
     /* Create the server fd. */
     printf("\e[1mPRINTF 6\e[0m\n");
+    /*
+        success: generate server addresses.
+        HERE
+        HERE
+        success: create server socket & connect.
+    */
     server_fd = create_server_fd ( hostname, port );
     if ( error_socket_server ( server_fd ) ) { return; }
 
     /* Write the request (header) to the server. */
-    printf("\e[PRINTF 7\e[0m\n");
+    printf("\e[1mPRINTF 7\e[0m\n");
+    // wrote  179 bytes to server.
     return_cd = write_all ( server_fd, request_hdr, strlen(request_hdr) );
     if ( error_write_server ( server_fd, return_cd ) ) { return; }
 
     /* Transfer the response from the server, to the client. (until server responds with EOF). */
 
    printf("\e[1mPRINTF 8\e[0m\n");
+    /*
+        read   773 bytes from server.
+        wrote  773 bytes to client.
+        reached end of server fd (EOF).
+        wrote    0 bytes to client.
+     */
    do {
       num_bytes = read ( server_fd, buf, MAX_LINE );
       if ( error_read_server  ( server_fd, num_bytes ) ) { return; }
@@ -136,6 +150,7 @@ void handle_request ( int client_fd )
     /* success; close the file descrpitor. */
 
    printf("\e[1mPRINTF 9\e[0m\n");
+    // CLOSE ETC.
     return_cd = close ( server_fd );
     if ( error_close_server ( return_cd ) ) { /* ignore */ }
 }
