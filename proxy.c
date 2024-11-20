@@ -10,12 +10,17 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <pthread.h>
 
 /* The source code for the proxy is split across three files (including this one). */
 #include "proxy.h" // proxy
 #include "error.h" // error reporting for ^
 #include "http.h"  // http-related things for ^
 #include "io.h"    // io-related things for ^
+
+typedef struct {
+    int client_fd;
+} thread_args;
 
 
 int main ( int argc, char **argv )
@@ -36,28 +41,49 @@ int main ( int argc, char **argv )
     return 0; // Indicates "no error" (although this is never reached).
 }
 
-void handle_connection_request ( int listen_fd )
+void* handle_request_thread(void* arg) {
+    // Detach thread to automatically free resources
+    pthread_detach(pthread_self());
+
+    // Extract client file descriptor
+    thread_args* args = (thread_args*)arg;
+    int client_fd = args->client_fd;
+    free(args);  // Free argument structure
+
+    // Call original handle_request function
+    handle_request(client_fd);
+
+    // Close client file descriptor
+    close(client_fd);
+
+    return NULL;
+}
+
+void handle_connection_request(int listen_fd)
 {
     int client_fd;   // fd for clients that connect.
-    int return_cd;   // return- (aka. error-) code of function calls.
-    
-    printf("\e[1mawaiting connection request...\e[0m\n");
-    
-    /* "Kernel, give me the fd of a connected socket for the next connection request."
-       NOTE: this blocks the proxy until a connection arrives.
-       https://man7.org/linux/man-pages/man2/accept.2.html (a system call) */
-    client_fd = accept ( listen_fd, (struct sockaddr*)NULL, NULL ); // accept awaiting request
-    if ( error_accept_fatal ( client_fd ) ) { exit(1); }
-    if ( error_accept ( client_fd ) ) { return; }
+    pthread_t thread_id;
+    thread_args* args;
 
-    /* Handle (presumably, a HTTP GET) request. */
-    handle_request(client_fd);
-    
-    /* "Kernel, we done handling request; close fd." (errors ignored; see man page)
-       https://man7.org/linux/man-pages/man2/close.2.html (a system call) */
-    return_cd = close(client_fd);
-    if ( error_close ( return_cd ) ) { /* ignore */ }
-    
+    printf("\e[1mawaiting connection request...\e[0m\n");
+
+    // Accept connection
+    client_fd = accept(listen_fd, (struct sockaddr*)NULL, NULL);
+    if (error_accept_fatal(client_fd)) { exit(1); }
+    if (error_accept(client_fd)) { return; }
+
+    // Prepare arguments for thread
+    args = malloc(sizeof(thread_args));
+    args->client_fd = client_fd;
+
+    // Create detached thread to handle request
+    if (pthread_create(&thread_id, NULL, handle_request_thread, args) != 0) {
+        perror("Failed to create thread");
+        close(client_fd);
+        free(args);
+        return;
+    }
+
     printf("\e[1mfinished processing request.\e[0m\n");
 }
 
