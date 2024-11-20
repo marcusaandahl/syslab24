@@ -81,11 +81,8 @@ void handle_request ( int client_fd )
     /* read HTTP Request-line */
     printf("\e[1mPRINTF 1\e[0m\n");
    // read    N bytes from client.
-    // printf("", buf);
     num_bytes = read_line ( client_fd, buf );
-    printf("\e[1mPRINTF 1.1\e[0m\n");
-    // if ( error_read ( num_bytes ) ) { return; }
-    read_line(client_fd, buf);
+    if ( error_read ( num_bytes ) ) { return; }
 
     /* print what we just read (it's not null-terminated) */
     printf("\e[1mPRINTF 2\e[0m\n");
@@ -115,6 +112,8 @@ void handle_request ( int client_fd )
     // success: set request header.
     return_cd = set_request_header ( request_hdr, hostname, path, port, client_fd );
     if ( error_header ( return_cd ) ) { return; }
+
+    printf("headers: %.*s\n", (int)sizeof(request_hdr), request_hdr);
 
     /* Create the server fd. */
     printf("\e[1mPRINTF 6\e[0m\n");
