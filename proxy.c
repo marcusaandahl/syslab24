@@ -161,6 +161,32 @@ static int cache_insert(const char* key, const char* data, size_t data_size) {
     // Acquire write lock
     pthread_rwlock_wrlock(&global_cache.cache_lock);
 
+    // Check if key already exists (update if it does)
+    cache_entry_t* current = global_cache.head;
+    while (current != NULL) {
+        if (strcmp(current->key, key) == 0) {
+            // Update existing entry
+            if (data_size > current->data_size) {
+                // Need to reallocate
+                char* new_data = realloc(current->data, data_size);
+                if (!new_data) {
+                    pthread_rwlock_unlock(&global_cache.cache_lock);
+                    return -1;
+                }
+                current->data = new_data;
+            }
+
+            memcpy(current->data, data, data_size);
+            current->data_size = data_size;
+            current->last_accessed = time(NULL);
+            move_to_front(current);
+
+            pthread_rwlock_unlock(&global_cache.cache_lock);
+            return 0;
+        }
+        current = current->next;
+    }
+
     // Check total cache size before insertion
     while (global_cache.total_size + data_size > MAX_CACHE_SIZE ||
            global_cache.num_entries >= 10) {  // Limit to 10 entries
@@ -232,24 +258,6 @@ static void cache_cleanup() {
     pthread_rwlock_unlock(&global_cache.cache_lock);
     pthread_rwlock_destroy(&global_cache.cache_lock);
 }
-
-// int main ( int argc, char **argv )
-// {
-//     int listen_fd; // fd for connection requests from clients.
-//
-//     /* Check command line args for presence of a port number. */
-//     if ( error_args_fatal ( argc, argv ) ) { exit(1); }
-//
-//     /* Create a `socket`, `bind` it to listen address, configure it to `listen` (for connection requests). */
-//     listen_fd = create_listen_fd ( atoi(argv[1]) );
-//
-//     /* Handle connection requests. */
-//     while ( 1 ) {
-//        handle_connection_request ( listen_fd );
-//     }
-//
-//     return 0; // Indicates "no error" (although this is never reached).
-// }
 
 int main ( int argc, char **argv )
 {
@@ -359,13 +367,17 @@ void handle_request ( int client_fd )
     parse_uri(uri, hostname, path, port);
 
     /* First, check if response is cached */
-    char cache_key[MAX_LINE * 2];  // Combined hostname and path
-    snprintf(cache_key, sizeof(cache_key), "%s%s", hostname, path);
+    // Use the full URI as the cache key
+    char cache_key[MAX_LINE * 2];
+    snprintf(cache_key, sizeof(cache_key), "%s", uri);
 
     cache_buffer_size = MAX_OBJECT_SIZE;
     if (cache_lookup(cache_key, cache_buffer, &cache_buffer_size) == 0) {
         // Cache hit: send cached response directly to client
-        write_all(client_fd, cache_buffer, cache_buffer_size);
+        ssize_t bytes_sent = write_all(client_fd, cache_buffer, cache_buffer_size);
+        if (bytes_sent < 0) {
+            perror("Failed to write cached response to client");
+        }
         return;
     }
 
@@ -393,8 +405,8 @@ void handle_request ( int client_fd )
       if ( error_read_server  ( server_fd, num_bytes ) ) { return; }
 
       // Write to client
-      num_bytes = write_all ( client_fd, buf, num_bytes );
-      if ( error_write_client ( client_fd, num_bytes ) ) { return; }
+      return_cd = write_all ( client_fd, buf, num_bytes );
+      if ( error_write_client ( client_fd, return_cd ) ) { return; }
 
       // Accumulate response for potential caching
       if (total_response_size + num_bytes <= MAX_OBJECT_SIZE) {
@@ -403,7 +415,7 @@ void handle_request ( int client_fd )
       }
    } while ( num_bytes > 0 );
 
-   // Cache the response if it's within size limits
+   // Cache the full response if it's within size limits
    if (total_response_size > 0 && total_response_size <= MAX_OBJECT_SIZE) {
        cache_insert(cache_key, response_buffer, total_response_size);
    }
@@ -412,118 +424,6 @@ void handle_request ( int client_fd )
    return_cd = close ( server_fd );
    if ( error_close_server ( return_cd ) ) { /* ignore */ }
 }
-
-// void handle_request ( int client_fd )
-// {
-//     int server_fd;                // server file descriptor
-//
-//     /* String variables */
-//     char buf[MAX_LINE];
-//     char method[MAX_LINE];
-//     char uri[MAX_LINE];
-//     char version[MAX_LINE];
-//     char hostname[MAX_LINE];
-//     char path[MAX_LINE];
-//     char port[MAX_LINE];
-//     char request_hdr[MAX_LINE];
-//
-//     int return_cd;
-//     ssize_t num_bytes;
-//
-//     /* read HTTP Request-line */
-//     // printf("\e[1mPRINTF 1\e[0m\n");
-//    // read    N bytes from client.
-//     num_bytes = read_line ( client_fd, buf );
-//     if ( error_read ( num_bytes ) ) { return; }
-//
-//     /* print what we just read (it's not null-terminated) */
-//     // printf("\e[1mPRINTF 2\e[0m\n");
-//    // GET http://google.com/ HTTP/1.1
-//     printf("%.*s", (int)num_bytes, buf); // typeast is safe; num_bytes <= MAX_LINE
-//     sscanf(buf, "%s %s %s", method, uri, version);
-//
-//     /* Ignore non-GET requests (your proxy is only tested on GET requests). */
-//     // printf("\e[1mPRINTF 3\e[0m\n");
-//    // success: it is a GET request.
-//     if ( error_non_get ( method ) ) { return; }
-//
-//     /* Parse URI from GET request */
-//    // printf("\e[1mPRINTF 4\e[0m\n");
-//     // _
-//     parse_uri(uri, hostname, path, port);
-//
-//     /* Set the request header */
-//     // printf("\e[1mPRINTF 5\e[0m\n");
-//     /*
-//         read    18 bytes from client.
-//         read    24 bytes from client.
-//         read    13 bytes from client.
-//         read    30 bytes from client.
-//         read     2 bytes from client.
-//      */
-//     // success: set request header.
-//     return_cd = set_request_header ( request_hdr, hostname, path, port, client_fd );
-//     if ( error_header ( return_cd ) ) { return; }
-//
-//     printf("headers: %.*s\n", (int)sizeof(request_hdr), request_hdr);
-//
-//     /* Create the server fd. */
-//     // printf("\e[1mPRINTF 6\e[0m\n");
-//     /*
-//         success: generate server addresses.
-//         HERE
-//         HERE
-//         success: create server socket & connect.
-//     */
-//     server_fd = create_server_fd ( hostname, port );
-//     if ( error_socket_server ( server_fd ) ) { return; }
-//
-//     /* Write the request (header) to the server. */
-//     // printf("\e[1mPRINTF 7\e[0m\n");
-//     // wrote  179 bytes to server.
-//     return_cd = write_all ( server_fd, request_hdr, strlen(request_hdr) );
-//     if ( error_write_server ( server_fd, return_cd ) ) { return; }
-//
-//     /* Transfer the response from the server, to the client. (until server responds with EOF). */
-//
-//    // printf("\e[1mPRINTF 8\e[0m\n");
-//     /*
-//         read   773 bytes from server.
-//         wrote  773 bytes to client.
-//         reached end of server fd (EOF).
-//         wrote    0 bytes to client.
-//      */
-//     /* TODO: Start - CACHE
-//      * MAX_CACHE_SIZE - for max cache size - only count bytes used to store the actual web objects - any extraneous bytes, including metadata, should be ignored
-//      * MAX_OBJECT_SIZE - max size of objects stored
-//      * This proxy should cache items smaller than MAX_CACHE_SIZE (100KiB) and in total MAX_CACHE_SIZE (1MiB)
-//      * For each active communication, a buffer should be allocated, and accumulated with data as it is received
-//      * If the buffer size exceeds MAX_OBJECT_SIZE => discard buffer
-//      * Otherwise, cache the response
-//      * The cache should use a "least-recently-used" eviction policy
-//      * This policy does so the least read OR written object in the cache is evicted when the cache after before writing greater than MAX_CACHE_SIZE-(MAX_CACHE_SIZE*2)
-//      * The cache should be thread-safe
-//      * The cache should avoid race conditions
-//      * Multiple threads must be able to simultaneously read from the cache
-//      * Only one thread should be able to write at a time
-//      * Protecting accesses to the cache with one large exclusive lock is not an acceptable solution
-//     * More valid options include "partitioning the cache", "using Pthreads readers-writers locks", "using semaphores to implement own readers-writers solution"
-//      * TODO: End - CACHE
-//      */
-//    do {
-//       num_bytes = read ( server_fd, buf, MAX_LINE );
-//       if ( error_read_server  ( server_fd, num_bytes ) ) { return; }
-//       num_bytes = write_all ( client_fd, buf, num_bytes );
-//       if ( error_write_client ( client_fd, num_bytes ) ) { return; }
-//    } while ( num_bytes > 0 );
-//
-//     /* success; close the file descrpitor. */
-//
-//    // printf("\e[1mPRINTF 9\e[0m\n");
-//     // CLOSE ETC.
-//     return_cd = close ( server_fd );
-//     if ( error_close_server ( return_cd ) ) { /* ignore */ }
-// }
 
 int create_listen_fd ( int port )
 {
