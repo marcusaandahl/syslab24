@@ -118,15 +118,26 @@ static void remove_lru_entry() {
     free(lru_entry->data);
     free(lru_entry);
 }
+// Add to top of file for debugging
+#define DEBUG_CACHE 1
 
-// Cache lookup function
+#ifdef DEBUG_CACHE
+#define CACHE_DEBUG(fmt, ...) fprintf(stderr, "[CACHE DEBUG] " fmt, ##__VA_ARGS__)
+#else
+#define CACHE_DEBUG(fmt, ...)
+#endif
+
 static int cache_lookup(const char* key, char* buffer, size_t* buffer_size) {
+    CACHE_DEBUG("Attempting to lookup key: %s\n", key);
+
     pthread_rwlock_rdlock(&global_cache.cache_lock);
 
     cache_entry_t* current = global_cache.head;
     while (current != NULL) {
         if (strcmp(current->key, key) == 0) {
-            // Found the entry, copy data if buffer is large enough
+            CACHE_DEBUG("Cache hit for key: %s\n", key);
+
+            // Verify buffer is large enough
             if (*buffer_size >= current->data_size) {
                 memcpy(buffer, current->data, current->data_size);
                 *buffer_size = current->data_size;
@@ -138,7 +149,8 @@ static int cache_lookup(const char* key, char* buffer, size_t* buffer_size) {
                 pthread_rwlock_unlock(&global_cache.cache_lock);
                 return 0;
             } else {
-                // Buffer too small
+                CACHE_DEBUG("Buffer too small for cache entry. Buffer size: %zu, Entry size: %zu\n",
+                            *buffer_size, current->data_size);
                 pthread_rwlock_unlock(&global_cache.cache_lock);
                 return -1;
             }
@@ -147,27 +159,30 @@ static int cache_lookup(const char* key, char* buffer, size_t* buffer_size) {
     }
 
     // Not found in cache
+    CACHE_DEBUG("Cache miss for key: %s\n", key);
     pthread_rwlock_unlock(&global_cache.cache_lock);
     return -1;
 }
 
-// Cache insert function
 static int cache_insert(const char* key, const char* data, size_t data_size) {
+    CACHE_DEBUG("Attempting to insert key: %s, size: %zu\n", key, data_size);
+
     // Validate object size
     if (data_size > MAX_OBJECT_SIZE) {
+        CACHE_DEBUG("Object too large to cache. Size: %zu, Max: %d\n", data_size, MAX_OBJECT_SIZE);
         return -1;
     }
 
-    // Acquire write lock
     pthread_rwlock_wrlock(&global_cache.cache_lock);
 
     // Check if key already exists (update if it does)
     cache_entry_t* current = global_cache.head;
     while (current != NULL) {
         if (strcmp(current->key, key) == 0) {
+            CACHE_DEBUG("Updating existing cache entry for key: %s\n", key);
+
             // Update existing entry
             if (data_size > current->data_size) {
-                // Need to reallocate
                 char* new_data = realloc(current->data, data_size);
                 if (!new_data) {
                     pthread_rwlock_unlock(&global_cache.cache_lock);
@@ -187,9 +202,10 @@ static int cache_insert(const char* key, const char* data, size_t data_size) {
         current = current->next;
     }
 
-    // Check total cache size before insertion
+    // Remove LRU entries if necessary
     while (global_cache.total_size + data_size > MAX_CACHE_SIZE ||
-           global_cache.num_entries >= 10) {  // Limit to 10 entries
+           global_cache.num_entries >= 10) {
+        CACHE_DEBUG("Removing LRU entry to make space\n");
         remove_lru_entry();
     }
 
@@ -232,7 +248,8 @@ static int cache_insert(const char* key, const char* data, size_t data_size) {
     global_cache.total_size += data_size;
     global_cache.num_entries++;
 
-    // Release write lock
+    CACHE_DEBUG("Successfully inserted key: %s\n", key);
+
     pthread_rwlock_unlock(&global_cache.cache_lock);
 
     return 0;
@@ -261,12 +278,12 @@ static void cache_cleanup() {
 
 int main ( int argc, char **argv )
 {
-    int listen_fd; // fd for connection requests from clients.
+    int listen_fd;
 
     /* Check command line args for presence of a port number. */
     if ( error_args_fatal ( argc, argv ) ) { exit(1); }
 
-    // Initialize cache
+    // Initialize cache BEFORE any other operations
     if (cache_init() != 0) {
         fprintf(stderr, "Failed to initialize cache\n");
         exit(1);
@@ -283,7 +300,7 @@ int main ( int argc, char **argv )
         handle_connection_request ( listen_fd );
     }
 
-    return 0; // Indicates "no error" (although this is never reached).
+    return 0;
 }
 
 void* handle_request_thread(void* arg) {
@@ -334,9 +351,7 @@ void handle_connection_request(int listen_fd)
 
 void handle_request ( int client_fd )
 {
-    int server_fd;                // server file descriptor
-
-    /* String variables */
+    int server_fd;
     char buf[MAX_LINE];
     char method[MAX_LINE];
     char uri[MAX_LINE];
@@ -357,39 +372,28 @@ void handle_request ( int client_fd )
     num_bytes = read_line ( client_fd, buf );
     if ( error_read ( num_bytes ) ) { return; }
 
-    printf("%.*s", (int)num_bytes, buf);
     sscanf(buf, "%s %s %s", method, uri, version);
 
-    /* Ignore non-GET requests (your proxy is only tested on GET requests). */
+    /* Ignore non-GET requests */
     if ( error_non_get ( method ) ) { return; }
 
     /* Parse URI from GET request */
     parse_uri(uri, hostname, path, port);
 
     /* First, check if response is cached */
-    // Use the full URI as the cache key
     char cache_key[MAX_LINE * 2];
     snprintf(cache_key, sizeof(cache_key), "%s", uri);
 
     cache_buffer_size = MAX_OBJECT_SIZE;
     if (cache_lookup(cache_key, cache_buffer, &cache_buffer_size) == 0) {
-        // Cache hit: send cached response directly to client
-        printf("Cache hit for %s\n", cache_key);
-        ssize_t bytes_sent = write_all(client_fd, cache_buffer, cache_buffer_size);
-        if (bytes_sent < 0) {
-            perror("Failed to write cached response to client");
-        }
+        // Definitive cache hit - send entire cached response to client
+        write_all(client_fd, cache_buffer, cache_buffer_size);
         return;
     }
-
-    // Cache miss: proceed with normal request handling
-    printf("Cache miss for %s\n", cache_key);
 
     /* Set the request header */
     return_cd = set_request_header ( request_hdr, hostname, path, port, client_fd );
     if ( error_header ( return_cd ) ) { return; }
-
-    printf("headers: %.*s\n", (int)sizeof(request_hdr), request_hdr);
 
     /* Create the server fd. */
     server_fd = create_server_fd ( hostname, port );
@@ -402,11 +406,14 @@ void handle_request ( int client_fd )
     /* Prepare for caching */
     char response_buffer[MAX_OBJECT_SIZE];
     size_t total_response_size = 0;
+    int caching_possible = 1;
 
-   /* Transfer the response from the server, to the client. (until server responds with EOF). */
-   do {
+    /* Transfer the response from the server, to the client. */
+    do {
       num_bytes = read ( server_fd, buf, MAX_LINE );
       if ( error_read_server  ( server_fd, num_bytes ) ) { return; }
+
+      if (num_bytes <= 0) break;
 
       // Write to client
       return_cd = write_all ( client_fd, buf, num_bytes );
@@ -416,18 +423,20 @@ void handle_request ( int client_fd )
       if (total_response_size + num_bytes <= MAX_OBJECT_SIZE) {
           memcpy(response_buffer + total_response_size, buf, num_bytes);
           total_response_size += num_bytes;
+      } else {
+          // Too large to cache
+          caching_possible = 0;
       }
-   } while ( num_bytes > 0 );
+    } while ( num_bytes > 0 );
 
-   // Cache the full response if it's within size limits
-   if (total_response_size > 0 && total_response_size <= MAX_OBJECT_SIZE) {
-       cache_insert(cache_key, response_buffer, total_response_size);
-       printf("Cached response for %s (size: %zu)\n", cache_key, total_response_size);
-   }
+    // Cache the full response if it's within size limits
+    if (caching_possible && total_response_size > 0) {
+        cache_insert(cache_key, response_buffer, total_response_size);
+    }
 
-   /* success; close the file descriptor. */
-   return_cd = close ( server_fd );
-   if ( error_close_server ( return_cd ) ) { /* ignore */ }
+    /* success; close the file descriptor. */
+    return_cd = close ( server_fd );
+    if ( error_close_server ( return_cd ) ) { /* ignore */ }
 }
 
 int create_listen_fd ( int port )
