@@ -374,12 +374,16 @@ void handle_request ( int client_fd )
     cache_buffer_size = MAX_OBJECT_SIZE;
     if (cache_lookup(cache_key, cache_buffer, &cache_buffer_size) == 0) {
         // Cache hit: send cached response directly to client
+        printf("Cache hit for %s\n", cache_key);
         ssize_t bytes_sent = write_all(client_fd, cache_buffer, cache_buffer_size);
         if (bytes_sent < 0) {
             perror("Failed to write cached response to client");
         }
         return;
     }
+
+    // Cache miss: proceed with normal request handling
+    printf("Cache miss for %s\n", cache_key);
 
     /* Set the request header */
     return_cd = set_request_header ( request_hdr, hostname, path, port, client_fd );
@@ -418,6 +422,7 @@ void handle_request ( int client_fd )
    // Cache the full response if it's within size limits
    if (total_response_size > 0 && total_response_size <= MAX_OBJECT_SIZE) {
        cache_insert(cache_key, response_buffer, total_response_size);
+       printf("Cached response for %s (size: %zu)\n", cache_key, total_response_size);
    }
 
    /* success; close the file descriptor. */
