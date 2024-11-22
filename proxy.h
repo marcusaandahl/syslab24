@@ -14,3 +14,9 @@ void get_client_socket_address ( struct sockaddr *client_addr, char *hostname, c
 void set_listen_socket_address ( struct sockaddr_in *listen_addr, int port );
 int  get_server_socket_address_candidates ( struct addrinfo **cand_ai, char* hostname, char* port );
 int  create_server_fd ( char* hostname, char* port );
+
+// Additional function declarations
+void handle_connection_request(int listen_fd);
+void* handle_request_thread(void* arg);
+void handle_request(int client_fd);
+int create_listen_fd(int port);
