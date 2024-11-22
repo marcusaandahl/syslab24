@@ -28,9 +28,8 @@ typedef struct cache_entry {
 static struct {
     cache_entry_t* head; // Latest cache item
     size_t total_size; // Cache size
-    int entry_count; // N entries
     pthread_rwlock_t lock; // read-write lock
-} cache = {NULL, 0, 0, PTHREAD_RWLOCK_INITIALIZER};
+} cache = {NULL, 0, PTHREAD_RWLOCK_INITIALIZER};
 
 // Thread args struct
 typedef struct {
