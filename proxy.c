@@ -223,10 +223,6 @@ void handle_request(int client_fd) {
     if (cache_lookup(uri, response_buffer, &response_size) == 0) {
         // Cache hit - send directly to client
         write(client_fd, response_buffer, response_size);
-        // Store response in cache as latest entry
-        if (response_size <= MAX_OBJECT_SIZE) {
-            cache_insert(uri, response_buffer, response_size);
-        }
         return;
     }
 
