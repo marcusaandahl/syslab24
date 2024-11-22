@@ -21,7 +21,6 @@ typedef struct cache_entry {
     char* url; // URL as key
     char* data; // Cached response
     size_t size; // Response size
-    time_t timestamp; // For LRU implementation
     struct cache_entry* next; // Next entry pointer (like linked list)
 } cache_entry_t;
 
@@ -63,14 +62,37 @@ static void cache_cleanup() {
 
 // Look up a URL in the cache
 static int cache_lookup(const char* url, char* buffer, size_t* size) {
-    // TODO: Add move to head on lookup
     cache_entry_t* entry = cache.head;
     while (entry) {
         if (strcmp(entry->url, url) == 0) {
             if (*size >= entry->size) {
                 memcpy(buffer, entry->data, entry->size);
                 *size = entry->size;
-                entry->timestamp = time(NULL);
+
+                // If hit is head -> continue
+                cache_entry_t* entry_hit = cache.head;
+                if (strcmp(entry_hit->url, url) == 0) { return 0; }
+
+                // Move cache hit to head of cache
+                cache_entry_t* entry_before_hit = cache.head;
+                entry_hit = entry_hit->next;
+
+                while (entry_hit) {
+                    if (strcmp(entry_hit->url, url) == 0) {
+                        // Is hit
+                        entry_before_hit->next = entry_hit->next; // Skip entry hit in cache
+                        // Move entry hit to front
+                        entry_hit->next = cache.head->next;
+                        cache.head = entry_hit;
+                        return 0;
+                    }
+                    entry_before_hit = entry_hit;
+                    entry_hit = entry_hit->next;
+                }
+
+
+                cache.head = entry;
+
                 return 0;
             }
             return -1;
@@ -115,7 +137,6 @@ static void cache_insert(const char* url, const char* data, size_t size) {
     new_entry->data = malloc(size);
     memcpy(new_entry->data, data, size);
     new_entry->size = size;
-    new_entry->timestamp = time(NULL);
 
     // Add to front of list
     new_entry->next = cache.head;
