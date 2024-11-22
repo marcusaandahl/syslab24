@@ -211,9 +211,6 @@ void handle_request(int client_fd) {
     ssize_t num_bytes = read_line(client_fd, buf);
     if ( error_read ( num_bytes ) ) { return; }
 
-    // Read request line
-    read_line(client_fd, buf);
-
     // Parse request line
     sscanf(buf, "%s %s %s", method, uri, version);
 
