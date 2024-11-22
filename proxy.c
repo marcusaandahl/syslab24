@@ -63,8 +63,7 @@ static void cache_cleanup() {
 
 // Look up a URL in the cache
 static int cache_lookup(const char* url, char* buffer, size_t* size) {
-    // pthread_rwlock_rdlock(&cache.lock);
-
+    // TODO: Add move to head on lookup
     cache_entry_t* entry = cache.head;
     while (entry) {
         if (strcmp(entry->url, url) == 0) {
@@ -72,16 +71,12 @@ static int cache_lookup(const char* url, char* buffer, size_t* size) {
                 memcpy(buffer, entry->data, entry->size);
                 *size = entry->size;
                 entry->timestamp = time(NULL);
-                // pthread_rwlock_unlock(&cache.lock);
                 return 0;
             }
-            // pthread_rwlock_unlock(&cache.lock);
             return -1;
         }
         entry = entry->next;
     }
-
-    // pthread_rwlock_unlock(&cache.lock);
     return -1;
 }
 
@@ -133,8 +128,6 @@ static void cache_insert(const char* url, const char* data, size_t size) {
 
 int main ( int argc, char **argv )
 {
-    // fd for connection requests from clients.
-
     /* Check command line args for presence of a port number. */
     if ( error_args_fatal ( argc, argv ) ) { exit(1); }
 
@@ -182,7 +175,6 @@ void handle_connection_request(int listen_fd)
     // Create thread args and spawn new thread
     thread_args* args = malloc(sizeof(thread_args));
     args->client_fd = client_fd;
-
     pthread_t thread_id;
     if (pthread_create(&thread_id, NULL, handle_request_thread, args) != 0) {
         perror("Failed to create thread");
@@ -191,7 +183,6 @@ void handle_connection_request(int listen_fd)
         return;
     }
 
-    // Main thread continues to accept new connections
     printf("\e[1mspawned new thread for request.\e[0m\n");
 }
 
