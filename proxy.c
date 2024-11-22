@@ -133,7 +133,7 @@ static void cache_insert(const char* url, const char* data, size_t size) {
 
 int main ( int argc, char **argv )
 {
-    int listen_fd; // fd for connection requests from clients.
+    // fd for connection requests from clients.
 
     /* Check command line args for presence of a port number. */
     if ( error_args_fatal ( argc, argv ) ) { exit(1); }
@@ -143,7 +143,7 @@ int main ( int argc, char **argv )
     atexit(cache_cleanup);
 
     /* Create a `socket`, `bind` it to listen address, configure it to `listen` (for connection requests). */
-    listen_fd = create_listen_fd ( atoi(argv[1]) );
+    const int listen_fd = create_listen_fd(atoi(argv[1]));
     if (listen_fd < 0) {
         fprintf(stderr, "Failed to create listening socket\n");
         return 1;
@@ -153,43 +153,36 @@ int main ( int argc, char **argv )
     while ( 1 ) {
         handle_connection_request ( listen_fd );
     }
-
-    return 0; // Indicates "no error" (although this is never reached).
 }
 
 void* handle_request_thread(void* arg) {
     pthread_detach(pthread_self());
 
-    thread_args* args = arg;
+    thread_args* args = (thread_args*)arg;
     int client_fd = args->client_fd;
     free(args);
 
     handle_request(client_fd);
-
     close(client_fd);
+
     return NULL;
 }
 
-void handle_connection_request ( int listen_fd )
+void handle_connection_request(int listen_fd)
 {
-    int client_fd;   // fd for clients that connect.
-    int return_cd;   // return- (aka. error-) code of function calls.
-
     printf("\e[1mawaiting connection request...\e[0m\n");
 
     /* "Kernel, give me the fd of a connected socket for the next connection request."
        NOTE: this blocks the proxy until a connection arrives.
        https://man7.org/linux/man-pages/man2/accept.2.html (a system call) */
-    client_fd = accept ( listen_fd, (struct sockaddr*)NULL, NULL ); // accept awaiting request
-    if ( error_accept_fatal ( client_fd ) ) { exit(1); }
-    if ( error_accept ( client_fd ) ) { return; }
+    const int client_fd = accept(listen_fd, NULL, NULL);
+    if (error_accept_fatal(client_fd)) { exit(1); }
+    if (error_accept(client_fd)) { return; }
 
-    /* Handle (presumably, a HTTP GET) request. */
-    handle_request(client_fd);
-
-    // Create thread
+    // Create thread args and spawn new thread
     thread_args* args = malloc(sizeof(thread_args));
     args->client_fd = client_fd;
+
     pthread_t thread_id;
     if (pthread_create(&thread_id, NULL, handle_request_thread, args) != 0) {
         perror("Failed to create thread");
@@ -198,7 +191,8 @@ void handle_connection_request ( int listen_fd )
         return;
     }
 
-    printf("\e[1mfinished processing request.\e[0m\n");
+    // Main thread continues to accept new connections
+    printf("\e[1mspawned new thread for request.\e[0m\n");
 }
 
 void handle_request(int client_fd) {
